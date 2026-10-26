@@ -8,14 +8,48 @@
   <link rel="icon" href="https://www.intern-mecos.com/favicon.ico">
   <style>
     /* MECOS PAY を画面いっぱいに出すための入れ物。中身は本番の入口アプリ（Apps Script）で、ここにはデータも鍵も置かない。
-       Apps Script を直接開くと出る「このアプリケーションは…ユーザーによって作成されたものです」の帯は、埋め込むと出ない。 */
-    html, body { margin: 0; height: 100%; background: #F5F7FA; }
-    iframe { display: block; width: 100%; height: 100%; height: 100dvh; border: 0; }
+       Apps Script を直接開くと出る「このアプリケーションは…ユーザーによって作成されたものです」の帯は、埋め込むと出ない。
+       ただし埋め込みの中には、ブラウザによって Google のログイン情報が渡らず 401 になる（Safari・iPhone、他サイトの Cookie を
+       ブロックする設定、シークレット）。初めて使う人の Google の確認画面も埋め込みの中には出せない。そのため：
+         - Safari・iPhone では埋め込まず、入口を直接開くボタンを出す
+         - それ以外では埋め込みつつ、上端に「開けないときは新しいタブで」の細い帯を常に出す */
+    html, body { margin: 0; height: 100%; background: #F5F7FA; font-family: "Noto Sans JP", "Hiragino Sans", Meiryo, sans-serif; color: #20242B; }
+    body { display: flex; flex-direction: column; }
+    .bar { flex: none; padding: 4px 12px; font-size: 12px; line-height: 1.6; color: #5B6270; background: #fff; border-bottom: 1px solid #E3E7EE; text-align: right; }
+    .bar a { color: #1F5FD1; }
+    iframe { display: block; flex: 1; width: 100%; border: 0; }
+    .launch { margin: auto; padding: 32px 24px; max-width: 420px; text-align: center; line-height: 1.8; }
+    .launch h1 { font-size: 22px; margin: 0 0 12px; }
+    .launch a.button { display: inline-block; margin: 16px 0; padding: 12px 24px; background: #1F5FD1; color: #fff; border-radius: 8px; text-decoration: none; font-weight: bold; }
+    .launch p { font-size: 14px; color: #5B6270; margin: 0; }
   </style>
 </head>
 <body>
-  <iframe title="MECOS PAY"
-    src="https://script.google.com/macros/s/AKfycbzsNYOA0NXsPvEQbDDRMjt4Xv2wR9cUZPTiSvBCEZVG-RkKrLw24P6ZAaA5JxSe8lzm/exec"
-    allow="clipboard-write; storage-access"></iframe>
+  <script>
+    (function() {
+      var LOGIN_URL = 'https://script.google.com/macros/s/AKfycbzsNYOA0NXsPvEQbDDRMjt4Xv2wR9cUZPTiSvBCEZVG-RkKrLw24P6ZAaA5JxSe8lzm/exec';
+      var ua = navigator.userAgent;
+      // Safari（Mac・iPhone・iPad）は他サイトの Cookie を送らないため、埋め込むと 401 になる。iPhone の Chrome なども中身は Safari と同じ。
+      var apple = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+      var safari = /Safari/.test(ua) && !/Chrome|Chromium|Edg|OPR|Firefox/.test(ua);
+      if (apple || safari) {
+        document.body.innerHTML =
+          '<div class="launch"><h1>MECOS PAY</h1>' +
+          '<a class="button" href="' + LOGIN_URL + '">MECOS PAY を開く</a>' +
+          '<p>このブラウザでは、Google の画面に切り替えて開きます。<br>上に Google の注意書きが出ますが、そのまま使えます。</p></div>';
+        return;
+      }
+      var bar = document.createElement('div');
+      bar.className = 'bar';
+      bar.innerHTML = '開けない・真っ白・「401」と出るときは <a href="' + LOGIN_URL + '" target="_blank" rel="noopener">新しいタブで開く</a>';
+      var frame = document.createElement('iframe');
+      frame.title = 'MECOS PAY';
+      frame.src = LOGIN_URL;
+      frame.setAttribute('allow', 'clipboard-write; storage-access');
+      document.body.appendChild(bar);
+      document.body.appendChild(frame);
+    })();
+  </script>
+  <noscript><p style="padding:24px"><a href="https://script.google.com/macros/s/AKfycbzsNYOA0NXsPvEQbDDRMjt4Xv2wR9cUZPTiSvBCEZVG-RkKrLw24P6ZAaA5JxSe8lzm/exec">MECOS PAY を開く</a></p></noscript>
 </body>
 </html>
