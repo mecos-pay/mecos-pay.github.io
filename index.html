@@ -6,50 +6,67 @@
   <meta name="robots" content="noindex, nofollow">
   <title>MECOS PAY</title>
   <link rel="icon" href="https://www.intern-mecos.com/favicon.ico">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
-    /* MECOS PAY を画面いっぱいに出すための入れ物。中身は本番の入口アプリ（Apps Script）で、ここにはデータも鍵も置かない。
-       Apps Script を直接開くと出る「このアプリケーションは…ユーザーによって作成されたものです」の帯は、埋め込むと出ない。
-       ただし埋め込みの中には、ブラウザによって Google のログイン情報が渡らず 401 になる（Safari・iPhone、他サイトの Cookie を
-       ブロックする設定、シークレット）。初めて使う人の Google の確認画面も埋め込みの中には出せない。そのため：
-         - Safari・iPhone では埋め込まず、入口を直接開くボタンを出す
-         - それ以外では埋め込みつつ、上端に「開けないときは新しいタブで」の細い帯を常に出す */
+    /* MECOS PAY の入口（画面いっぱい）。ここで「Google でログイン」をして、受け取った本人証明（IDトークン）を本体に POST し、
+       本体が返す画面（通行証つき）を全面に埋め込む。本体は Google ログインなしでも開ける設定なので、Safari・iPhone でも 401 にならない。
+       ここにはデータも鍵も置かない（OAuth クライアントIDは公開してよい値）。 */
     html, body { margin: 0; height: 100%; background: #F5F7FA; font-family: "Noto Sans JP", "Hiragino Sans", Meiryo, sans-serif; color: #20242B; }
-    body { display: flex; flex-direction: column; }
-    .bar { flex: none; padding: 4px 12px; font-size: 12px; line-height: 1.6; color: #5B6270; background: #fff; border-bottom: 1px solid #E3E7EE; text-align: right; }
-    .bar a { color: #1F5FD1; }
-    iframe { display: block; flex: 1; width: 100%; border: 0; }
-    .launch { margin: auto; padding: 32px 24px; max-width: 420px; text-align: center; line-height: 1.8; }
-    .launch h1 { font-size: 22px; margin: 0 0 12px; }
-    .launch a.button { display: inline-block; margin: 16px 0; padding: 12px 24px; background: #1F5FD1; color: #fff; border-radius: 8px; text-decoration: none; font-weight: bold; }
-    .launch p { font-size: 14px; color: #5B6270; margin: 0; }
+    #signin { min-height: 100%; display: flex; align-items: center; justify-content: center; }
+    .card { background: #fff; border: 1px solid #E3E7EE; border-radius: 12px; padding: 32px 28px; max-width: 360px; width: calc(100% - 32px); box-sizing: border-box; text-align: center; line-height: 1.8; }
+    .card h1 { margin: 0 0 8px; font-size: 22px; }
+    .card p { margin: 0 0 16px; font-size: 14px; color: #5B6270; }
+    #gbutton { display: flex; justify-content: center; min-height: 44px; }
+    #message { margin-top: 12px; font-size: 13px; color: #B3261E; }
+    iframe { display: none; position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #F5F7FA; }
+    body.app #signin { display: none; }
+    body.app iframe { display: block; }
   </style>
 </head>
 <body>
+  <div id="signin">
+    <div class="card">
+      <h1>MECOS PAY</h1>
+      <p>登録した Google アカウントでログインしてください。</p>
+      <div id="gbutton"></div>
+      <div id="message" role="alert"></div>
+    </div>
+  </div>
+  <iframe name="app" id="app" title="MECOS PAY" allow="clipboard-write"></iframe>
+  <form id="loginForm" method="post" target="app" hidden><input type="hidden" name="credential" id="credential"></form>
   <script>
     (function() {
-      var LOGIN_URL = 'https://script.google.com/macros/s/AKfycbzsNYOA0NXsPvEQbDDRMjt4Xv2wR9cUZPTiSvBCEZVG-RkKrLw24P6ZAaA5JxSe8lzm/exec';
-      var ua = navigator.userAgent;
-      // Safari（Mac・iPhone・iPad）は他サイトの Cookie を送らないため、埋め込むと 401 になる。iPhone の Chrome なども中身は Safari と同じ。
-      var apple = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-      var safari = /Safari/.test(ua) && !/Chrome|Chromium|Edg|OPR|Firefox/.test(ua);
-      if (apple || safari) {
-        document.body.innerHTML =
-          '<div class="launch"><h1>MECOS PAY</h1>' +
-          '<a class="button" href="' + LOGIN_URL + '">MECOS PAY を開く</a>' +
-          '<p>このブラウザでは、Google の画面に切り替えて開きます。<br>上に Google の注意書きが出ますが、そのまま使えます。</p></div>';
-        return;
+      var CONFIG = {
+        // 本番の本体（Google ログインなしでも開ける設定で公開しているもの）と、Google ログインの OAuth クライアントID
+        app: 'https://script.google.com/macros/s/AKfycbwu-LSQspmexNhGXgtBmCvX4G_WdOfxoPFSgpzG72zMWmtTYCjZ99Bjaivke5tk9WMhRQ/exec',
+        clientId: '__GIS_CLIENT_ID__'
+      };
+      var form = document.getElementById('loginForm'), message = document.getElementById('message');
+      form.action = CONFIG.app;
+      function signedIn(response) {
+        if (!response || !response.credential) { message.textContent = 'ログインできませんでした。もう一度お試しください。'; return; }
+        document.getElementById('credential').value = response.credential;
+        document.body.className = 'app';
+        form.submit(); // 本人証明を本体へ送り、返ってきた画面を全面に出す（本人証明は URL に載せない）
+        document.getElementById('credential').value = '';
       }
-      var bar = document.createElement('div');
-      bar.className = 'bar';
-      bar.innerHTML = '開けない・真っ白・「401」と出るときは <a href="' + LOGIN_URL + '" target="_blank" rel="noopener">新しいタブで開く</a>';
-      var frame = document.createElement('iframe');
-      frame.title = 'MECOS PAY';
-      frame.src = LOGIN_URL;
-      frame.setAttribute('allow', 'clipboard-write; storage-access');
-      document.body.appendChild(bar);
-      document.body.appendChild(frame);
+      function start() {
+        if (!window.google || !google.accounts || !google.accounts.id) { setTimeout(start, 200); return; }
+        google.accounts.id.initialize({client_id: CONFIG.clientId, callback: signedIn, auto_select: true, itp_support: true, use_fedcm_for_prompt: true});
+        google.accounts.id.renderButton(document.getElementById('gbutton'), {theme: 'outline', size: 'large', text: 'signin_with', locale: 'ja'});
+        google.accounts.id.prompt(); // 前回ログインした人は、自動でログインする
+      }
+      // 本体から「ログインし直してほしい」（通行証の期限切れなど）と言われたら、ログイン画面に戻す
+      window.addEventListener('message', function(event) {
+        if (!/\.googleusercontent\.com$|^https:\/\/script\.google\.com$/.test(event.origin)) return;
+        if (!event.data || event.data.type !== 'mecos-login-required') return;
+        document.body.className = '';
+        // 自動ログインはしない（許可リストにない人などで、ログイン→断られる→ログインを繰り返さないように）。ボタンを押してもらう。
+        message.textContent = 'ログインの有効期限が切れたか、ログインできませんでした。もう一度ログインしてください。';
+        if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+      });
+      start();
     })();
   </script>
-  <noscript><p style="padding:24px"><a href="https://script.google.com/macros/s/AKfycbzsNYOA0NXsPvEQbDDRMjt4Xv2wR9cUZPTiSvBCEZVG-RkKrLw24P6ZAaA5JxSe8lzm/exec">MECOS PAY を開く</a></p></noscript>
 </body>
 </html>
