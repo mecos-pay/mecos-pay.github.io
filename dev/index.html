@@ -38,7 +38,12 @@
         app: 'https://script.google.com/macros/s/AKfycbxc2UjLLoPB6ZICOSeAJWvidQDTKd1m-1-DVuwQenlev5u_zc0X-tq5jPK_LulvB7W5/exec',
         clientId: '308894795051-snk366gaf8p1d0i3tb4j9orh8s8q97et.apps.googleusercontent.com'
       };
-      var message = document.getElementById('message'), busy = false;
+      var message = document.getElementById('message'), busy = false, KEY = 'mecos-session:' + CONFIG.app;
+      function show_(html) { document.open(); document.write(html); document.close(); }
+      // 前回のログインから通行証の期限内なら、ログイン確認を省いてそのまま開く（切れていれば画面が消して、ここに戻す）
+      function saved_() {
+        try { var value = JSON.parse(localStorage.getItem(KEY) || 'null'); return value && value.html && value.expires > Date.now() ? value.html : ''; } catch (ignore) { return ''; }
+      }
       function show(text, info) { message.textContent = text; message.className = info ? 'info' : ''; }
       function signedIn(response) {
         if (busy) return;
@@ -57,7 +62,8 @@
               return;
             }
             // 本体から受け取った画面（通行証つき）に、このページをまるごと置き換える
-            document.open(); document.write(res.html); document.close();
+            try { localStorage.setItem(KEY, JSON.stringify({html: res.html, expires: Date.now() + 5.5 * 60 * 60 * 1000})); } catch (ignore) {}
+            show_(res.html);
           })
           .catch(function(error) { busy = false; show((error && error.message ? error.message : '接続できませんでした。') + ' 少し待ってもう一度お試しください。'); });
       }
@@ -67,7 +73,9 @@
         google.accounts.id.renderButton(document.getElementById('gbutton'), {theme: 'outline', size: 'large', text: 'signin_with', locale: 'ja'});
         google.accounts.id.prompt(); // 前回ログインした人は、自動でログインする
       }
-      start();
+      var html = saved_();
+      if (!html) start();
+      else { document.getElementById('signin').style.visibility = 'hidden'; window.addEventListener('DOMContentLoaded', function() { show_(html); }); }
     })();
   </script>
 </body>
